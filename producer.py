@@ -1,4 +1,4 @@
-! pip install kafka-python
+# ! pip install kafka-python
 
 KAFKA_BOOTSTRAP_SERVERS = ['10.67.22.111:9092']
 
