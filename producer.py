@@ -1,20 +1,10 @@
-# ! pip install kafka-python
-
 KAFKA_BOOTSTRAP_SERVERS = ['10.67.22.111:9092']
 
 import os
 import time
-import boto3
 import numpy as np
 
-s3 = boto3.client(
-    's3',
-    endpoint_url='https://cloud-areapd.pd.infn.it:5210',
-    aws_access_key_id=os.environ['S3_ACCESS_KEY'],
-    aws_secret_access_key=os.environ['S3_SECRET_KEY']
-)
-
-BUCKET = 'quax'
+DATA_DIR = '/home/ubuntu/quax_data'   # پوشه‌ای که داده‌ها اینجا دانلود شدن
 
 from kafka.admin import KafkaAdminClient, NewTopic
 kafka_admin = KafkaAdminClient(
@@ -34,19 +24,18 @@ while 1:
     for file_index in range(31):
         idata = f'duck_i_{file_index:05d}.dat'
         qdata = f'duck_q_{file_index:05d}.dat'
-    
-        response = s3.get_object(Bucket=BUCKET, Key=idata)
-        raw_bytes = response['Body'].read()
+
+        with open(f'{DATA_DIR}/{idata}', 'rb') as f: # فایل از روی مستر خوانده میشود
+            raw_bytes = f.read()
         flat = np.frombuffer(raw_bytes, dtype='<f4')
         i_table = flat.reshape(4096, 2048)
-    
+
         # همون کار برای کیو
-    
-        response_q = s3.get_object(Bucket=BUCKET, Key=qdata)
-        raw_bytes_q = response_q['Body'].read()
+        with open(f'{DATA_DIR}/{qdata}', 'rb') as f:
+            raw_bytes_q = f.read()
         flat_q = np.frombuffer(raw_bytes_q, dtype='<f4')
         q_table = flat_q.reshape(4096, 2048)
-    
+
         for scan_index in range(4096):
             iscan = i_table[scan_index]
             qscan = q_table[scan_index]
