@@ -30,28 +30,29 @@ kafka_admin.create_topics(new_topics=[a_new_topic])
 from kafka import KafkaProducer
 producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
 
-for file_index in range(31):
-    idata = f'duck_i_{file_index:05d}.dat'
-    qdata = f'duck_q_{file_index:05d}.dat'
-
-    response = s3.get_object(Bucket=BUCKET, Key=idata)
-    raw_bytes = response['Body'].read()
-    flat = np.frombuffer(raw_bytes, dtype='<f4')
-    i_table = flat.reshape(4096, 2048)
-
-    # همون سه قدم، اینبار برای q
-    response_q = s3.get_object(Bucket=BUCKET, Key=qdata)
-    raw_bytes_q = response_q['Body'].read()
-    flat_q = np.frombuffer(raw_bytes_q, dtype='<f4')
-    q_table = flat_q.reshape(4096, 2048)
-
-    for scan_index in range(4096):
-        iscan = i_table[scan_index]
-        qscan = q_table[scan_index]
-        scan_id = f'{file_index}_{scan_index}'
-        value = iscan.tobytes() + qscan.tobytes()
-        producer.send(topic='topic_stream',
-                      key=scan_id.encode(),
-                      value=value)
-    producer.flush()
-    time.sleep(4)
+while 1:
+    for file_index in range(31):
+        idata = f'duck_i_{file_index:05d}.dat'
+        qdata = f'duck_q_{file_index:05d}.dat'
+    
+        response = s3.get_object(Bucket=BUCKET, Key=idata)
+        raw_bytes = response['Body'].read()
+        flat = np.frombuffer(raw_bytes, dtype='<f4')
+        i_table = flat.reshape(4096, 2048)
+    
+        # همون سه قدم، اینبار برای q
+        response_q = s3.get_object(Bucket=BUCKET, Key=qdata)
+        raw_bytes_q = response_q['Body'].read()
+        flat_q = np.frombuffer(raw_bytes_q, dtype='<f4')
+        q_table = flat_q.reshape(4096, 2048)
+    
+        for scan_index in range(4096):
+            iscan = i_table[scan_index]
+            qscan = q_table[scan_index]
+            scan_id = f'{file_index}_{scan_index}'
+            value = iscan.tobytes() + qscan.tobytes()
+            producer.send(topic='topic_stream',
+                          key=scan_id.encode(),
+                          value=value)
+        producer.flush()
+        time.sleep(4)
