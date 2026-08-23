@@ -40,7 +40,8 @@ while 1:
         flat = np.frombuffer(raw_bytes, dtype='<f4')
         i_table = flat.reshape(4096, 2048)
     
-        # همون سه قدم، اینبار برای q
+        # همون کار برای کیو
+    
         response_q = s3.get_object(Bucket=BUCKET, Key=qdata)
         raw_bytes_q = response_q['Body'].read()
         flat_q = np.frombuffer(raw_bytes_q, dtype='<f4')
