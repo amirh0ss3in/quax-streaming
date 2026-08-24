@@ -38,7 +38,6 @@ for file_index in range(31):
 
 print(data_i.shape, data_q.shape)
 
-
 # We are going to use for the highest resolution and most accurate timer, as discussed here:
 # https://docs.python.org/3/library/time.html#time.perf_counter
 
@@ -46,7 +45,7 @@ print(data_i.shape, data_q.shape)
 #   It does include time elapsed during sleep. The clock is the same for all processes."
 from time import perf_counter
 
-TIME_INTERVAL = 4 # seconds
+TIME_INTERVAL = 0.1 # seconds
 DT = TIME_INTERVAL / 4096
 
 t0 = perf_counter()          # stopwatch start
@@ -74,8 +73,9 @@ while True:
             elapsed = perf_counter() - t0        # how long we've been running
             should_be = n * DT                   # how long we should have been running
             sleep_time = max(0, should_be-elapsed) # ... so we sleep that amount, to get into schedule.
-
-            time.sleep(sleep_time)
+            
+            if sleep_time > 0: # Probably the most important line in this code. Extremely important.
+                time.sleep(sleep_time)
                 
         t2_file = perf_counter()
         t_file = t2_file-t1_file
