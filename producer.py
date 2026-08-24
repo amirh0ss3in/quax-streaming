@@ -46,7 +46,14 @@ print(data_i.shape, data_q.shape)
 from time import perf_counter
 
 TIME_INTERVAL = 0.1 # seconds
-DT = TIME_INTERVAL / 4096
+
+# Each message carries a slice of SCANS_PER_MSG scans instead of a single one.
+# Payload layout is: all I scans of the slice, then all Q scans of the slice,
+# i.e. the consumer reshapes the bytes as (2, SCANS_PER_MSG, 2048) float32.
+SCANS_PER_MSG = 8
+N_MSGS = 4096 // SCANS_PER_MSG   # messages per file
+
+DT = TIME_INTERVAL / N_MSGS      # now the spacing between messages, not scans
 
 t0 = perf_counter()          # stopwatch start
 n = 0                        # messages sent so far
@@ -56,11 +63,14 @@ while True:
         i_table = data_i[file_index]
         q_table = data_q[file_index]
         t1_file = perf_counter()
-        for scan_index in range(4096):
-            iscan = i_table[scan_index]
-            qscan = q_table[scan_index]
+        for msg_index in range(N_MSGS):
+            lo = msg_index * SCANS_PER_MSG
+            hi = lo + SCANS_PER_MSG
 
-            scan_id = f'{file_index}_{scan_index}'
+            iscan = i_table[lo:hi]
+            qscan = q_table[lo:hi]
+
+            scan_id = f'{file_index}_{msg_index}'
             value = iscan.tobytes() + qscan.tobytes()
 
             producer.send(
