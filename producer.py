@@ -15,7 +15,7 @@ print("Print available topics:", kafka_admin.list_topics())
 
 if 'topic_stream' not in kafka_admin.list_topics():
     a_new_topic = NewTopic(name='topic_stream',
-                        num_partitions=6, # 3 VMs, 2x Core per VM, So we need *at least* 6 partitions.
+                        num_partitions=8, # 3 VMs, 4x Core for master and 2x Core per the two workers = total of 8, So we need *at least* 8 partitions.
                         replication_factor=1)
     kafka_admin.create_topics(new_topics=[a_new_topic])
 
