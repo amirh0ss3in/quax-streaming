@@ -38,11 +38,25 @@ for file_index in range(31):
 
 print(data_i.shape, data_q.shape)
 
+
+# We are going to use for the highest resolution and most accurate timer, as discussed here:
+# https://docs.python.org/3/library/time.html#time.perf_counter
+
+# " ...a clock with the highest available resolution to measure a short duration. 
+#   It does include time elapsed during sleep. The clock is the same for all processes."
+from time import perf_counter
+
+TIME_INTERVAL = 4 # seconds
+DT = TIME_INTERVAL / 4096
+
+t0 = perf_counter()          # stopwatch start
+n = 0                        # messages sent so far
+
 while True:
     for file_index in range(31):
         i_table = data_i[file_index]
         q_table = data_q[file_index]
-
+        t1_file = perf_counter()
         for scan_index in range(4096):
             iscan = i_table[scan_index]
             qscan = q_table[scan_index]
@@ -55,6 +69,28 @@ while True:
                 key=scan_id.encode(),
                 value=value
             )
+            
+            n += 1
+            elapsed = perf_counter() - t0        # how long we've been running
+            should_be = n * DT                   # how long we should have been running
+            sleep_time = max(0, should_be-elapsed) # ... so we sleep that amount, to get into schedule.
 
+            time.sleep(sleep_time)
+                
+        t2_file = perf_counter()
+        t_file = t2_file-t1_file
+        print(f"\rFile time: {t_file:.6f}s, error = {(t_file/TIME_INTERVAL-1)*100:.4f}%   ", end="", flush=True)
         producer.flush()
-        time.sleep(4)
+
+        # t0 is our origin, let's say 1 pm. By the time a file is done, n*DT says exactly
+        # 4 seconds *should have* passed, but perf_counter() (the current time) usually
+        # reads a bit later, because the flush and the sleep overshoots cost us extra.
+        # So we move the origin back to 1 pm "with a difference": now minus the 4
+        # seconds that were supposed to elapse. That way the time we overran still
+        # counts as scheduled time, and the next messages don't sprint to catch up 
+        # (this makes the problem of initial burst in the next files fixed!).
+        # The max() keeps this one-directional: we can forgive a lost time if there is something to forgive...!
+        # remember, we are hoping to get back to 1 pm + extra time cause by flush. That's all.
+        # P.S: I'm assuming TIME_INTERVAL = 4 # seconds to explain this
+        
+        t0 = max(t0, perf_counter() - n * DT)   # forgive time lost to flush
