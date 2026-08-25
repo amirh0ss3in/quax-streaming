@@ -114,7 +114,12 @@ while True:
                 slept += 1
         t2_file = perf_counter()
         t_file = t2_file-t1_file
-        print(f"\rFile time: {t_file:.6f}s, error = {(t_file/TIME_INTERVAL-1)*100:.4f}%   , paced {slept}/{n} msgs", end="", flush=True)
+        msg = (
+            f"File time: {t_file:4.6f}s, "
+            f"error = {(t_file/TIME_INTERVAL-1)*100:+.4f}%, "
+            f"paced {slept/n:2.2f}% msgs"
+        )
+        print(f"\r{msg:<80}", end="", flush=True)
         producer.flush()
 
         # t0 is our origin, let's say 1 pm. By the time a file is done, n*DT says exactly
