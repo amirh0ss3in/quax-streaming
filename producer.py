@@ -13,16 +13,32 @@ kafka_admin = KafkaAdminClient(
 
 print("Print available topics:", kafka_admin.list_topics())
 
-if 'topic_stream' not in kafka_admin.list_topics():
-    a_new_topic = NewTopic(name='topic_stream',
-                        num_partitions=8, # 3 VMs, 4x Core for master and 2x Core per the two workers = total of 8, So we need *at least* 8 partitions.
-                        replication_factor=1,
-                        topic_configs = {
-                            'retention.ms': str(10 * 60 * 1000),   # 10 Minutes
-                            'retention.bytes': str(640 * 1024**2), # 640 MiB/partition (Total of 5 GiB)
-                        }
-                    )
-    kafka_admin.create_topics(new_topics=[a_new_topic])
+# NOTE: 
+# Few things:
+# $KAFKA_HOME is just the address of the Kafka folder, exported with `export KAFKA_HOME=/path/to/kafka`.
+# Workers reach the broker via advertised.listeners=PLAINTEXT://10.67.22.111:9092 in server.properties (confirmed reachable from a worker VM).
+# topic_stream is created once, out of band:
+#
+#   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
+#     --create --topic topic_stream --partitions 8 --replication-factor 1 \
+#     --config retention.ms=600000 \
+#     --config retention.bytes=134217728 \
+#     --config segment.bytes=33554432 \
+#     --config segment.ms=1000 \
+#     --config file.delete.delay.ms=1000
+#
+# Retention only prunes closed segments, so segment.bytes must be well under
+# retention.bytes or the active segment alone blows the budget. Two broker-side
+# settings in server.properties (restart required, no per-topic equivalent):
+#
+#   log.retention.check.interval.ms=5000   # default 300000 is far too coarse at this rate
+#   auto.create.topics.enable=false        # else a stray run recreates this as 1 partition, no limits
+# 
+# It is worth to put the restart procedure here as well:
+# $KAFKA_HOME/bin/kafka-server-stop.sh
+# $KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
+# Now confirm the topic exists well:
+# $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_stream
 
 from kafka import KafkaProducer
 producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
@@ -64,6 +80,7 @@ t0 = perf_counter()          # stopwatch start
 n = 0                        # messages sent so far
 
 while True:
+    slept = 0
     for file_index in range(31):
         i_table = data_i[file_index]
         q_table = data_q[file_index]
@@ -91,10 +108,10 @@ while True:
             
             if sleep_time > 0: # Probably the most important line in this code. Extremely important.
                 time.sleep(sleep_time)
-                
+                slept += 1
         t2_file = perf_counter()
         t_file = t2_file-t1_file
-        print(f"\rFile time: {t_file:.6f}s, error = {(t_file/TIME_INTERVAL-1)*100:.4f}%   ", end="", flush=True)
+        print(f"\rFile time: {t_file:.6f}s, error = {(t_file/TIME_INTERVAL-1)*100:.4f}%, paced {slept}/{n} msgs", end="", flush=True)
         producer.flush()
 
         # t0 is our origin, let's say 1 pm. By the time a file is done, n*DT says exactly
