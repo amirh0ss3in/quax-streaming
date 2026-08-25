@@ -16,7 +16,8 @@ print("Print available topics:", kafka_admin.list_topics())
 # NOTE: 
 # Few things:
 # $KAFKA_HOME is just the address of the Kafka folder, exported with `export KAFKA_HOME=/path/to/kafka`.
-# Workers reach the broker via advertised.listeners=PLAINTEXT://10.67.22.111:9092 in server.properties (confirmed reachable from a worker VM).
+# Workers reach the broker via advertised.listeners=PLAINTEXT://10.67.22.111:9092 in server.properties (confirmed reachable from a worker VM with 
+# python -c "from kafka import KafkaAdminClient; a = KafkaAdminClient(bootstrap_servers=['10.67.22.111:9092']); print(a.describe_cluster()); a.close()")
 # topic_stream is created once, out of band:
 #
 #   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
