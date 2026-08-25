@@ -81,9 +81,9 @@ DT = TIME_INTERVAL / N_MSGS      # now the spacing between messages, not scans
 
 t0 = perf_counter()          # stopwatch start
 n = 0                        # messages sent so far
+slept = 0
 
 while True:
-    slept = 0
     for file_index in range(31):
         i_table = data_i[file_index]
         q_table = data_q[file_index]
