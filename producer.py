@@ -6,12 +6,12 @@ import numpy as np
 
 DATA_DIR = 'quax_data'   # our quax data was downloaded here.
 
-from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.admin import KafkaAdminClient
 kafka_admin = KafkaAdminClient(
     bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
 )
-
-print("Print available topics:", kafka_admin.list_topics())
+print("Print available topics:", kafka_admin.list_topics()) # just a small check.
+kafka_admin.close()
 
 # NOTE: 
 # Few things:
@@ -119,7 +119,7 @@ while True:
             f"File time: {t_file:4.6f}s | "
             f"error = {(t_file/TIME_INTERVAL-1)*100:+.4f}% | "
             f"{mb_s:6.1f} MB/s | "
-            f"paced {slept/n:2.2f}% msgs"
+            f"paced {100*slept/n:2.2f}% msgs"
         )
         print(f"\r{msg:<100}", end="", flush=True)
         producer.flush()
