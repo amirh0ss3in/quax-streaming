@@ -26,7 +26,8 @@ print("Print available topics:", kafka_admin.list_topics())
 #     --config segment.bytes=33554432 \
 #     --config segment.ms=1000 \
 #     --config file.delete.delay.ms=1000
-#
+# These settings may seem aggressive, but they ensure we can test the producer with small TIME_INTERVAL (and therefore high throughput) 
+# without filling the disk.
 # Retention only prunes closed segments, so segment.bytes must be well under
 # retention.bytes or the active segment alone blows the budget. Two broker-side
 # settings in server.properties (restart required, no per-topic equivalent):
@@ -111,7 +112,7 @@ while True:
                 slept += 1
         t2_file = perf_counter()
         t_file = t2_file-t1_file
-        print(f"\rFile time: {t_file:.6f}s, error = {(t_file/TIME_INTERVAL-1)*100:.4f}%, paced {slept}/{n} msgs", end="", flush=True)
+        print(f"\rFile time: {t_file:.6f}s, error = {(t_file/TIME_INTERVAL-1)*100:.4f}%   , paced {slept}/{n} msgs", end="", flush=True)
         producer.flush()
 
         # t0 is our origin, let's say 1 pm. By the time a file is done, n*DT says exactly
