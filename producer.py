@@ -30,6 +30,7 @@ kafka_admin.close()
 #
 # These settings may seem aggressive, but they ensure we can test the producer with small TIME_INTERVAL (and therefore high throughput) 
 # without filling the disk.
+# this is useful to read: https://kafka.apache.org/41/configuration/topic-configs/
 # Retention only prunes closed segments, so segment.bytes must be well under
 # retention.bytes or the active segment alone blows the budget. Two broker-side
 # settings in server.properties (restart required, no per-topic equivalent):
@@ -69,12 +70,19 @@ print(data_i.shape, data_q.shape)
 #   It does include time elapsed during sleep. The clock is the same for all processes."
 from time import perf_counter
 
-TIME_INTERVAL = 0.1 # seconds
+TIME_INTERVAL = 0.25 # seconds. this should put us above 250 MiB/s, a high throughput target. 
+                     # A small note worth mentioning: this is on the order of the bandwidth
+                     # available between our CloudVeneto VMs. We measured the connection with
+                     # iperf3 and obtained around 250 MiB/s with 1 TCP connection and around 640 MiB/s with
+                     # 8 parallel TCP connections in our simple benchmark.
+                     # This is despite the fact that the producer itself can run considerably
+                     # faster (down to around 0.10 seconds with SCANS_PER_MSG = 32) without
+                     # showing any performance degradation.
 
 # Each message carries a slice of SCANS_PER_MSG scans instead of a single one.
 # Payload layout is: all I scans of the slice, then all Q scans of the slice,
 # i.e. the consumer reshapes the bytes as (2, SCANS_PER_MSG, 2048) float32.
-SCANS_PER_MSG = 8 # each scan (I and Q together) is 16 KiB, and total size for message is the default which is 1 MiB. So this should be kept under SCANS_PER_MSG = 64.
+SCANS_PER_MSG = 32 # each scan (I and Q together) is 16 KiB, and total size for message is the default which is 1 MiB. So this should be kept under SCANS_PER_MSG = 64.
 N_MSGS = 4096 // SCANS_PER_MSG   # messages per file
 
 DT = TIME_INTERVAL / N_MSGS      # now the spacing between messages, not scans
