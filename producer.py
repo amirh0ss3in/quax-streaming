@@ -16,7 +16,12 @@ print("Print available topics:", kafka_admin.list_topics())
 if 'topic_stream' not in kafka_admin.list_topics():
     a_new_topic = NewTopic(name='topic_stream',
                         num_partitions=8, # 3 VMs, 4x Core for master and 2x Core per the two workers = total of 8, So we need *at least* 8 partitions.
-                        replication_factor=1)
+                        replication_factor=1,
+                        topic_configs = {
+                            'retention.ms': str(10 * 60 * 1000),   # 10 Minutes
+                            'retention.bytes': str(640 * 1024**2), # 640 MiB/partition (Total of 5 GiB)
+                        }
+                    )
     kafka_admin.create_topics(new_topics=[a_new_topic])
 
 from kafka import KafkaProducer
@@ -50,7 +55,7 @@ TIME_INTERVAL = 0.1 # seconds
 # Each message carries a slice of SCANS_PER_MSG scans instead of a single one.
 # Payload layout is: all I scans of the slice, then all Q scans of the slice,
 # i.e. the consumer reshapes the bytes as (2, SCANS_PER_MSG, 2048) float32.
-SCANS_PER_MSG = 8
+SCANS_PER_MSG = 8 # each scan (I and Q together) is 16 KiB, and total size for message is the default which is 1 MiB. So this should be kept under SCANS_PER_MSG = 64.
 N_MSGS = 4096 // SCANS_PER_MSG   # messages per file
 
 DT = TIME_INTERVAL / N_MSGS      # now the spacing between messages, not scans
