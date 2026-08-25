@@ -27,6 +27,7 @@ print("Print available topics:", kafka_admin.list_topics())
 #     --config segment.bytes=33554432 \
 #     --config segment.ms=1000 \
 #     --config file.delete.delay.ms=1000
+#
 # These settings may seem aggressive, but they ensure we can test the producer with small TIME_INTERVAL (and therefore high throughput) 
 # without filling the disk.
 # Retention only prunes closed segments, so segment.bytes must be well under
