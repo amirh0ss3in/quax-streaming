@@ -70,7 +70,7 @@ print(data_i.shape, data_q.shape)
 #   It does include time elapsed during sleep. The clock is the same for all processes."
 from time import perf_counter
 
-TIME_INTERVAL = 0.25 # seconds. this should put us above 250 MiB/s, a high throughput target. 
+TIME_INTERVAL = 4.2 # seconds. this should put us above 250 MiB/s, a high throughput target. 
                      # A small note worth mentioning: this is on the order of the bandwidth
                      # available between our CloudVeneto VMs. We measured the connection with
                      # iperf3 and obtained around 250 MiB/s with 1 TCP connection and around 640 MiB/s with
