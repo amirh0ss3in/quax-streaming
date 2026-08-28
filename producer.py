@@ -44,6 +44,23 @@ kafka_admin.close()
 # Now confirm the topic exists well:
 # $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_stream
 
+# NOTE 2:
+# topic_results is created once, out of band, same pattern as topic_stream:
+#
+#   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
+#     --create --topic topic_results --partitions 1 --replication-factor 1 \
+#     --config retention.ms=600000 \
+#     --config retention.bytes=134217728 \
+#     --config segment.bytes=33554432 \
+#     --config segment.ms=1000 \
+#     --config file.delete.delay.ms=1000
+#
+# Only 1 partition here, not 8 like topic_stream. the output
+# side doesn't need parallelism. one result message per batch,
+# produced from the driver via a single KafkaProducer, so there's nothing to
+# spread across partitions for.
+# Verify:
+# $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_results
 from kafka import KafkaProducer
 producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
 
@@ -70,7 +87,8 @@ print(data_i.shape, data_q.shape)
 #   It does include time elapsed during sleep. The clock is the same for all processes."
 from time import perf_counter
 
-TIME_INTERVAL = 4.2 # seconds. this should put us above 250 MiB/s, a high throughput target. 
+TIME_INTERVAL = 4    # seconds. a normal throughput target. 
+# TIME_INTERVAL = 0.25 # seconds. this should put us above 250 MiB/s, a high throughput target. 
                      # A small note worth mentioning: this is on the order of the bandwidth
                      # available between our CloudVeneto VMs. We measured the connection with
                      # iperf3 and obtained around 250 MiB/s with 1 TCP connection and around 640 MiB/s with
