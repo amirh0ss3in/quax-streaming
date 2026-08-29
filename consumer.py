@@ -8,7 +8,16 @@ os.environ["PYSPARK_DRIVER_PYTHON"] = "/home/ubuntu/pyvenv/bin/python3"
 
 from pyspark.sql import SparkSession
 
-# NOTE: Change this to whatever is needed for the actual consumer.
+# NOTE FOR LATER: spark.executor.memory and spark.sql.shuffle.partitions are not
+# tuned yet. They don't matter right now because this script only reads and
+# prints message metadata, no caching, no groupBy, no join, no shuffle.
+#
+# Once the real FFT + averaging step is added, revisit both:
+# - executor.memory: FFT output arrays get held in executor memory per task,
+#   size this based on actual batch size and per-node RAM, not the default.
+# - shuffle.partitions: any groupBy/agg for the per-bin average/std triggers a
+#   real shuffle. Default is 200, way too many for an 8-core cluster. Set it
+#   to match total cores (8), same reasoning used for the Kafka partition count.
 
 spark = SparkSession.builder \
     .master("spark://master:7077") \
