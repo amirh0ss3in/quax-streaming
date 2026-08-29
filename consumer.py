@@ -59,12 +59,39 @@ kafka_df_readable = kafka_df.select(
     "partition", "offset", "timestamp"
 )
 
+from pyspark.sql.streaming import StreamingQueryListener
+
+SCANS_PER_MSG = 32     # must match producer.py's SCANS_PER_MSG
+SCAN_LEN = 2048         # samples per scan
+BYTES_PER_SAMPLE = 4    # float32
+MSG_BYTES = SCANS_PER_MSG * SCAN_LEN * BYTES_PER_SAMPLE * 2  # *2 for I and Q
+
+class ProgressPrinter(StreamingQueryListener):
+    def onQueryStarted(self, event):
+        pass
+
+    def onQueryProgress(self, event):
+        p = event.progress
+        mb_s = (p.inputRowsPerSecond or 0) * MSG_BYTES / 1e6
+        print(
+            f"batch {p.batchId} | {p.numInputRows} msgs | "
+            f"{p.inputRowsPerSecond:.1f} msg/s in | "
+            f"{p.processedRowsPerSecond:.1f} msg/s processed | "
+            f"{mb_s:6.1f} MB/s | "
+            f"{p.durationMs.get('triggerExecution', 0)} ms/batch"
+        )
+
+    def onQueryTerminated(self, event):
+        pass
+
+spark.streams.addListener(ProgressPrinter())
+
 query = (
     kafka_df_readable.writeStream
     .format("console")
     .outputMode("append")
     .option("truncate", False)
-    .trigger(processingTime="2 seconds")
+    # .trigger(processingTime="2 seconds")
     .start()
 )
 
