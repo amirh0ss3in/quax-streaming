@@ -72,7 +72,7 @@ class ProgressPrinter(StreamingQueryListener):
 
     def onQueryProgress(self, event):
         p = event.progress
-        mb_s = (p.inputRowsPerSecond or 0) * MSG_BYTES / 1e6
+        mb_s = (p.inputRowsPerSecond or 0) * MSG_BYTES / 1e6 # "or 0" is just so if p.inputRowsPerSecond returns None, we print a 0, instead of crashing.
         print(
             f"batch {p.batchId} | {p.numInputRows} msgs | "
             f"{p.inputRowsPerSecond:.1f} msg/s in | "
