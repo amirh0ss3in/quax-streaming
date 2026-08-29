@@ -31,6 +31,36 @@ def check(_):
 for line in sorted(set(sc.parallelize(range(8), 8).map(check).collect())):
     print(line)
 
+
+
+kafka_df = (
+    spark.readStream
+    .format("kafka")
+    .option("kafka.bootstrap.servers", "10.67.22.111:9092")
+    .option("subscribe", "topic_stream")
+    .option("startingOffsets", "latest")
+    .load()
+)
+
+from pyspark.sql.functions import col, length
+
+kafka_df_readable = kafka_df.select(
+    col("key").cast("string").alias("scan_id"),
+    length("value").alias("value_bytes"),
+    "partition", "offset", "timestamp"
+)
+
+query = (
+    kafka_df_readable.writeStream
+    .format("console")
+    .outputMode("append")
+    .option("truncate", False)
+    .trigger(processingTime="2 seconds")
+    .start()
+)
+
+query.awaitTermination()
+
 input("UI at :4040 . This only keeps the script alive so you can see it. press Enter to exit...")
 
 spark.stop()
