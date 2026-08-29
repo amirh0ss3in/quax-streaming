@@ -31,4 +31,6 @@ def check(_):
 for line in sorted(set(sc.parallelize(range(8), 8).map(check).collect())):
     print(line)
 
+input("UI at :4040 . This only keeps the script alive so you can see it. press Enter to exit...")
+
 spark.stop()
