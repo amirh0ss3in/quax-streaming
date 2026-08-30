@@ -64,21 +64,22 @@ kafka_admin.close()
 from kafka import KafkaProducer
 producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
 
-data_i = np.empty((31, 4096, 2048), dtype=np.float32)
-data_q = np.empty((31, 4096, 2048), dtype=np.float32)
+# np.fromfile into np.empty held 31*4096*2048*4*2 = 2.08 GB of *anonymous*
+# memory, which the kernel cannot reclaim (this VM has no swap), so under
+# pressure from the broker the OOM killer took this process. np.memmap keeps
+# the same indexing but leaves the pages file-backed and evictable.
+data_i = [
+    np.memmap(f'{DATA_DIR}/duck_i_{file_index:05d}.dat',
+              dtype='<f4', mode='r', shape=(4096, 2048))
+    for file_index in range(31)
+]
+data_q = [
+    np.memmap(f'{DATA_DIR}/duck_q_{file_index:05d}.dat',
+              dtype='<f4', mode='r', shape=(4096, 2048))
+    for file_index in range(31)
+]
 
-for file_index in range(31):
-    data_i[file_index] = np.fromfile(
-        f'{DATA_DIR}/duck_i_{file_index:05d}.dat',
-        dtype='<f4'
-    ).reshape(4096, 2048)
-
-    data_q[file_index] = np.fromfile(
-        f'{DATA_DIR}/duck_q_{file_index:05d}.dat',
-        dtype='<f4'
-    ).reshape(4096, 2048)
-
-print(data_i.shape, data_q.shape)
+print(len(data_i), data_i[0].shape, len(data_q), data_q[0].shape)
 
 # We are going to use for the highest resolution and most accurate timer, as discussed here:
 # https://docs.python.org/3/library/time.html#time.perf_counter
