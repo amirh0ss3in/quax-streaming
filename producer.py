@@ -139,6 +139,9 @@ while True:
             if sleep_time > 0: # Probably the most important line in this code. Extremely important.
                 time.sleep(sleep_time)
                 slept += 1
+
+        producer.flush()
+
         t2_file = perf_counter()
         t_file = t2_file-t1_file
         mb_s = 64 * 1024**2 / t_file / 1e6 # just a small calculation, to be precise...
@@ -149,7 +152,6 @@ while True:
             f"paced {100*slept/n:2.2f}% msgs"
         )
         print(f"\r{msg:<100}", end="", flush=True)
-        producer.flush()
 
         # t0 is our origin, let's say 1 pm. By the time a file is done, n*DT says exactly
         # 4 seconds *should have* passed, but perf_counter() (the current time) usually
