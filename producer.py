@@ -1,6 +1,6 @@
 KAFKA_BOOTSTRAP_SERVERS = ['10.67.22.111:9092']
 
-import os
+import sys
 import time
 import numpy as np
 
@@ -13,7 +13,7 @@ kafka_admin = KafkaAdminClient(
 print("Print available topics:", kafka_admin.list_topics()) # just a small check.
 kafka_admin.close()
 
-
+## NOTE:
 ## Few things:
 ## $KAFKA_HOME is just the address of the Kafka folder, exported with `export KAFKA_HOME=/path/to/kafka`.
 ## Workers reach the broker via advertised.listeners=PLAINTEXT://10.67.22.111:9092 in server.properties (confirmed reachable from a worker VM with 
@@ -61,6 +61,7 @@ kafka_admin.close()
 ## spread across partitions for.
 ## Verify:
 ## $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_results
+
 from kafka import KafkaProducer
 producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
 
@@ -88,7 +89,7 @@ print(len(data_i), data_i[0].shape, len(data_q), data_q[0].shape)
 #   It does include time elapsed during sleep. The clock is the same for all processes."
 from time import perf_counter
 
-TIME_INTERVAL = 4    # seconds. a normal throughput target. 
+TIME_INTERVAL = float(sys.argv[1]) if len(sys.argv) > 1 else 4    # seconds. a normal throughput target. 
 # TIME_INTERVAL = 0.25 # seconds. this should put us above 250 MiB/s, a high throughput target. 
                      # A small note worth mentioning: this is on the order of the bandwidth
                      # available between our CloudVeneto VMs. We measured the connection with
