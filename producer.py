@@ -13,61 +13,61 @@ kafka_admin = KafkaAdminClient(
 print("Print available topics:", kafka_admin.list_topics()) # just a small check.
 kafka_admin.close()
 
-# NOTE: 
-# Few things:
-# $KAFKA_HOME is just the address of the Kafka folder, exported with `export KAFKA_HOME=/path/to/kafka`.
-# Workers reach the broker via advertised.listeners=PLAINTEXT://10.67.22.111:9092 in server.properties (confirmed reachable from a worker VM with 
-# python -c "from kafka import KafkaAdminClient; a = KafkaAdminClient(bootstrap_servers=['10.67.22.111:9092']); print(a.describe_cluster()); a.close()")
-# topic_stream is created once, out of band:
-#
-#   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
-#     --create --topic topic_stream --partitions 8 --replication-factor 1 \
-#     --config retention.ms=600000 \
-#     --config retention.bytes=134217728 \
-#     --config segment.bytes=33554432 \
-#     --config segment.ms=1000 \
-#     --config file.delete.delay.ms=1000
-#
-# These settings may seem aggressive, but they ensure we can test the producer with small TIME_INTERVAL (and therefore high throughput) 
-# without filling the disk.
-# this is useful to read: https://kafka.apache.org/41/configuration/topic-configs/
-# Retention only prunes closed segments, so segment.bytes must be well under
-# retention.bytes or the active segment alone blows the budget. Two broker-side
-# settings in server.properties (restart required, no per-topic equivalent):
-#
-#   log.retention.check.interval.ms=5000   # default 300000 is far too coarse at this rate
-#   auto.create.topics.enable=false        # else a stray run recreates this as 1 partition, no limits
-# 
-# It is worth to put the restart procedure here as well:
-# $KAFKA_HOME/bin/kafka-server-stop.sh
-# $KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
-# Now confirm the topic exists well:
-# $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_stream
 
-# NOTE 2:
-# topic_results is created once, out of band, same pattern as topic_stream:
-#
-#   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
-#     --create --topic topic_results --partitions 1 --replication-factor 1 \
-#     --config retention.ms=600000 \
-#     --config retention.bytes=134217728 \
-#     --config segment.bytes=33554432 \
-#     --config segment.ms=1000 \
-#     --config file.delete.delay.ms=1000
-#
-# Only 1 partition here, not 8 like topic_stream. the output
-# side doesn't need parallelism. one result message per batch,
-# produced from the driver via a single KafkaProducer, so there's nothing to
-# spread across partitions for.
-# Verify:
-# $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_results
+## Few things:
+## $KAFKA_HOME is just the address of the Kafka folder, exported with `export KAFKA_HOME=/path/to/kafka`.
+## Workers reach the broker via advertised.listeners=PLAINTEXT://10.67.22.111:9092 in server.properties (confirmed reachable from a worker VM with 
+## python -c "from kafka import KafkaAdminClient; a = KafkaAdminClient(bootstrap_servers=['10.67.22.111:9092']); print(a.describe_cluster()); a.close()")
+## topic_stream is created once, out of band:
+##
+##   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
+##     --create --topic topic_stream --partitions 8 --replication-factor 1 \
+##     --config retention.ms=600000 \
+##     --config retention.bytes=134217728 \
+##     --config segment.bytes=33554432 \
+##     --config segment.ms=1000 \
+##     --config file.delete.delay.ms=1000
+##
+## These settings may seem aggressive, but they ensure we can test the producer with small TIME_INTERVAL (and therefore high throughput) 
+## without filling the disk.
+## this is useful to read: https://kafka.apache.org/41/configuration/topic-configs/
+## Retention only prunes closed segments, so segment.bytes must be well under
+## retention.bytes or the active segment alone blows the budget. Two broker-side
+## settings in server.properties (restart required, no per-topic equivalent):
+##
+##   log.retention.check.interval.ms=5000   # default 300000 is far too coarse at this rate
+##   auto.create.topics.enable=false        # else a stray run recreates this as 1 partition, no limits
+## 
+## It is worth to put the restart procedure here as well:
+## $KAFKA_HOME/bin/kafka-server-stop.sh
+## $KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
+## Now confirm the topic exists well:
+## $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_stream
+
+## NOTE 2:
+## topic_results is created once, out of band, same pattern as topic_stream:
+##
+##   $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 \
+##     --create --topic topic_results --partitions 1 --replication-factor 1 \
+##     --config retention.ms=600000 \
+##     --config retention.bytes=134217728 \
+##     --config segment.bytes=33554432 \
+##     --config segment.ms=1000 \
+##     --config file.delete.delay.ms=1000
+##
+## Only 1 partition here, not 8 like topic_stream. the output
+## side doesn't need parallelism. one result message per batch,
+## produced from the driver via a single KafkaProducer, so there's nothing to
+## spread across partitions for.
+## Verify:
+## $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_results
 from kafka import KafkaProducer
 producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
 
-# np.fromfile into np.empty held 31*4096*2048*4*2 = 2.08 GB of *anonymous*
-# memory, which the kernel cannot reclaim (this VM has no swap), so under
-# pressure from the broker the OOM killer took this process. np.memmap keeps
-# the same indexing but leaves the pages file-backed and evictable.
+## np.fromfile into np.empty held 31*4096*2048*4*2 = 2.08 GB of *anonymous*
+## memory, which the kernel cannot reclaim (this VM has no swap), so under
+## pressure from the broker the OOM killer took this process. np.memmap keeps
+## the same indexing but leaves the pages file-backed and evictable.
 data_i = [
     np.memmap(f'{DATA_DIR}/duck_i_{file_index:05d}.dat',
               dtype='<f4', mode='r', shape=(4096, 2048))
