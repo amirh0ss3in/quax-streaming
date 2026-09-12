@@ -33,6 +33,11 @@ spark = (
     # ever receive rows. The default 200 would schedule 200 tasks per micro-batch,
     # 199 of them empty. Nothing crazy would happen with the default value, but it is nice to keep things in check.
     .config("spark.sql.shuffle.partitions", "1")
+    # This is a live monitor: after a restart we want current spectra, not a replay
+    # of a stale backlog. So no persistent checkpoint. Spark makes a temporary one
+    # per run and this line deletes it on stop. Cost: a restart skips whatever
+    # had arrived while we were down.
+    .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")
     .getOrCreate()
 )
 
@@ -174,7 +179,6 @@ def process_batch(batch_df, batch_id):
 query = (
     folded_df.writeStream
     .foreachBatch(process_batch)
-    .option("checkpointLocation", "/home/ubuntu/quax_streaming_checkpoint")
     .start()
 )
 
