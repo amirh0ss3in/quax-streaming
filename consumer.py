@@ -7,13 +7,15 @@ import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, pandas_udf, lit, to_json, struct
 from pyspark.sql.types import (
-    StructType, StructField, ArrayType, DoubleType, IntegerType, LongType
+    StructType, StructField, ArrayType, DoubleType, LongType
 )
 from pyspark.sql.streaming.listener import StreamingQueryListener
 
 SCANS_PER_MSG = 32                                    # must match producer.py
 SCAN_LEN = 2048
 MSG_BYTES = SCANS_PER_MSG * SCAN_LEN * 4 * 2          # float32, I and Q
+FS = 2e6                                              # ADC rate, 2 MS/s
+FREQ_HZ = np.fft.fftshift(np.fft.fftfreq(SCAN_LEN, 1 / FS)).tolist()   # -1 MHz .. +1 MHz
 BOOTSTRAP = "10.67.22.111:9092"
 
 spark = (
@@ -96,6 +98,9 @@ kafka_df = (
 def message_partials(values: pd.Series) -> pd.Series:
     out = []
     for v in values:
+        if v is None or len(v) != MSG_BYTES:          # poison message: skip, don't crash
+            out.append(None)
+            continue
         flat = np.frombuffer(v, dtype='<f4')
         half = flat.size // 2
         sig = (flat[:half].reshape(SCANS_PER_MSG, SCAN_LEN).astype(np.float64)
@@ -117,6 +122,7 @@ folded_schema = StructType([
 def fold_partition(batches):
     total, n = None, 0
     for pdf in batches:
+        pdf = pdf.dropna(subset=["partials"])         # drop the skipped ones
         if pdf.empty:
             continue
         chunk = np.stack(pdf["partials"].to_numpy()).sum(axis=0)
@@ -131,9 +137,10 @@ folded_df = partials_df.mapInPandas(fold_partition, schema=folded_schema)
 
 # reduce: avg + std per bin, one row per micro-batch.
 output_schema = StructType([
-    StructField("bin_index", ArrayType(IntegerType())),
+    StructField("freq_hz",   ArrayType(DoubleType())),
     StructField("avg_power", ArrayType(DoubleType())),
     StructField("std_power", ArrayType(DoubleType())),
+    StructField("n_scans",   LongType()),
 ])
 
 
@@ -144,9 +151,10 @@ def summarize_batch(pdf: pd.DataFrame) -> pd.DataFrame:
     mean = s1 / n
     var = np.maximum(s2 / n - mean ** 2, 0.0)          # guard fp noise
     return pd.DataFrame([{
-        "bin_index": list(range(SCAN_LEN)),
+        "freq_hz": FREQ_HZ,
         "avg_power": mean.tolist(),
         "std_power": np.sqrt(var).tolist(),
+        "n_scans": n,
     }])
 
 
@@ -154,7 +162,8 @@ def process_batch(batch_df, batch_id):
     (batch_df
         .groupBy(lit(1).alias("dummy"))
         .applyInPandas(summarize_batch, schema=output_schema)
-        .select(to_json(struct("bin_index", "avg_power", "std_power")).alias("value"))
+        .select(to_json(struct(lit(batch_id).alias("batch_id"),
+                               "freq_hz", "avg_power", "std_power", "n_scans")).alias("value"))
         .write
         .format("kafka")
         .option("kafka.bootstrap.servers", BOOTSTRAP)
