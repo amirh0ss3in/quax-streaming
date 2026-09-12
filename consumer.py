@@ -41,6 +41,7 @@ spark = (
     .getOrCreate()
 )
 
+spark.sparkContext.setLogLevel("ERROR")
 
 # progress reporting
 class ProgressPrinter(StreamingQueryListener):
