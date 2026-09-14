@@ -4,7 +4,7 @@ import sys
 import time
 import numpy as np
 
-DATA_DIR = 'quax_data'   # our quax data was downloaded here.
+DATA_DIR = '../quax_data'   # our quax data was downloaded here.
 
 from kafka.admin import KafkaAdminClient
 kafka_admin = KafkaAdminClient(
