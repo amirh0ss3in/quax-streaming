@@ -78,26 +78,26 @@ kafka_df = (
     .load()
 )
 
-# NOTE:
-# message_partials is a map. Say a micro-batch happens to hold 40 messages
-# (maxOffsetsPerTrigger caps it at 2048).
-# Given the 8 Kafka partitions, ideally, we have 5 messages per Kafka partition. 
-# Now in each JVM task thread (or rather, in the Python worker process next to it) message_partials calculates 
-# the FFT of each message, giving 5 arrays of length 4096,
-# where the first half of each array is sum P (over 32 scans) and second half is sum P**2 (over 32 scans).
-# we use kafka_df.select to declare this map.
-# now, inside each thread separately, we need to stack the 5 outputs of that thread into one. 
-# So we use fold_partition, where we take the 5 sum FFT messages per thread, and stack them together, 
-# and then sum them over the messages. 
-# Here to declare this "half aggregation" (and it is half aggregation because each thread only produces 
-# its own contribution, not the final answer) we use mapInPandas, because we have many rows in and one row out *within a single partition*,
-# with no key and no shuffle.
-# now we have 1 sum of FFT messages per each task thread (so, 8 messages total). 
-# In summarize_batch, we sum over the 8 messages (and here, because all rows must be brought together under one key, a shuffle happens via groupBy), 
-# and split the first and second half of the resulting array to get the mean and var (skipping explanation of math here, trivial).
-# but to actually apply all of this declaration, we need to group the data, we use a trick where for each batch we group all of it under one dummy alias,
-# and use applyInPandas because it works on grouped data. This is the step that finally brings the 8 threads' rows together, over the network. 
-# Finally, all this is done for each (micro) batch, with foreachBatch.
+## NOTE:
+## message_partials is a map. Say a micro-batch happens to hold 40 messages
+## (maxOffsetsPerTrigger caps it at 2048).
+## Given the 8 Kafka partitions, ideally, we have 5 messages per Kafka partition. 
+## Now in each JVM task thread (or rather, in the Python worker process next to it) message_partials calculates 
+## the FFT of each message, giving 5 arrays of length 4096,
+## where the first half of each array is sum P (over 32 scans) and second half is sum P**2 (over 32 scans).
+## we use kafka_df.select to declare this map.
+## now, inside each thread separately, we need to stack the 5 outputs of that thread into one. 
+## So we use fold_partition, where we take the 5 sum FFT messages per thread, and stack them together, 
+## and then sum them over the messages. 
+## Here to declare this "half aggregation" (and it is half aggregation because each thread only produces 
+## its own contribution, not the final answer) we use mapInPandas, because we have many rows in and one row out *within a single partition*,
+## with no key and no shuffle.
+## now we have 1 sum of FFT messages per each task thread (so, 8 messages total). 
+## In summarize_batch, we sum over the 8 messages (and here, because all rows must be brought together under one key, a shuffle happens via groupBy), 
+## and split the first and second half of the resulting array to get the mean and var (skipping explanation of math here, trivial).
+## but to actually apply all of this declaration, we need to group the data, we use a trick where for each batch we group all of it under one dummy alias,
+## and use applyInPandas because it works on grouped data. This is the step that finally brings the 8 threads' rows together, over the network. 
+## Finally, all this is done for each (micro) batch, with foreachBatch.
 
 
 @pandas_udf(ArrayType(DoubleType()))
