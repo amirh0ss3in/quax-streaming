@@ -27,7 +27,7 @@ spark = (
     .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1")
     # Arrow ships rows from the JVM task thread to the Python worker in batches: message_partials
     # slices over its partition with a window of 64 messages. At 512 KiB each that is
-    # 32 MiB of Arrow buffer per task; the default 10 000 would be around 5 GiB and (B)OOM.
+    # ~32 MiB of raw message payload per Arrow batch; the default 10 000 would be around 5 GiB and (B)OOM.
     .config("spark.sql.execution.arrow.maxRecordsPerBatch", "64")
     # the only shuffle is groupBy(lit(1)): one key, so exactly one reduce task can
     # ever receive rows. The default 200 would schedule 200 tasks per micro-batch,
@@ -175,7 +175,7 @@ def summarize_batch(pdf: pd.DataFrame) -> pd.DataFrame:
 def process_batch(batch_df, batch_id):
     (batch_df
         .groupBy(lit(1).alias("dummy"))
-        .applyInPandas(summarize_batch, schema=output_schema)
+        .applyInPandas(summarize_batch, schema=output_schema) # Horrible name btw, it would've been better to call it applyToGroup
         .select(to_json(struct(lit(batch_id).alias("batch_id"),
                                "freq_hz", "avg_power", "std_power", "n_scans")).alias("value"))
         .write
