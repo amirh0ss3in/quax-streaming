@@ -38,6 +38,7 @@ spark = (
     # per run and this line deletes it on stop. Cost: a restart skips whatever
     # had arrived while we were down.
     .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")
+    .config("spark.locality.wait", "0") # just use any free core immediately 
     .getOrCreate()
 )
 
