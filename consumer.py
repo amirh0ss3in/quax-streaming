@@ -111,8 +111,8 @@ kafka_df = (
 ## Finally, foreachBatch runs this whole processing pipeline independently
 ## for each streaming micro-batch.
 ##
-## P.S: we used 1024 (not 2048) and 1500m executor memory because full 2048-message batches (~1 GiB) ran 
-## the default 1g executors out of heap.
+## P.S: we used maxOffsetsPerTrigger = 1024 (not 2048) and 1500m executor memory because at extremely high throughput
+## Spark falls behind and batches grow to the cap, and full 2048-message batches (~1 GiB) ran the default 1g executors out of heap.
 
 @pandas_udf(ArrayType(DoubleType()))
 def message_partials(values: pd.Series) -> pd.Series:
