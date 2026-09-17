@@ -9,11 +9,17 @@ from kafka import KafkaConsumer
 PORT, BOOTSTRAP = 8000, ['10.67.22.111:9092']
 state = {}                                   # latest batch + running average
 
+## NOTE:
+## This code is relatively simple. 
+## We have two threads that run continuously, so we use threading to run them concurrently.
+## One thread continuously consumes messages from Kafka and updates the shared state with the latest and cumulative results.
+## The other thread runs the HTTP server, which responds to browser requests and generates the latest plot for the dashboard.
+
 
 def consume():
     cum, cum_n = None, 0
     for msg in KafkaConsumer('topic_results', bootstrap_servers=BOOTSTRAP,
-                             auto_offset_reset='latest', value_deserializer=json.loads):
+                             auto_offset_reset='latest', value_deserializer=lambda v: json.loads(v.decode('utf-8'))):
         m = msg.value
         p, n = np.array(m['avg_power']), m['n_scans']
         cum = p * n if cum is None else cum + p * n
@@ -31,7 +37,7 @@ def render():
     ax.set(xlabel='frequency [Hz]', ylabel='power', yscale='log',
            title=f"batch {s['bid']} — {s['n']} scans — {s['cum_n']} total")
     ax.legend()
-    buf = io.BytesIO(); fig.savefig(buf, format='png', dpi=90, bbox_inches='tight')
+    buf = io.BytesIO(); fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
     plt.close(fig)
     return buf.getvalue()
 
