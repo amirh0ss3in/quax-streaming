@@ -24,12 +24,12 @@ def consume():
         p, n = np.array(m['avg_power']), m['n_scans']
         cum = p * n if cum is None else cum + p * n
         cum_n += n
-        state.update(f=np.array(m['freq_hz']), p=p, e=np.array(m['std_power']),
+        state.update(f=np.array(m['freq_hz']), p=p, e=np.array(m['std_power']) / np.sqrt(n),
                      cum=cum / cum_n, n=n, cum_n=cum_n, bid=m['batch_id'])
 
 
 def render():
-    s = state
+    s = dict(state)
     fig, ax = plt.subplots(figsize=(11, 5.5))
     ax.fill_between(s['f'], s['p'] - s['e'], s['p'] + s['e'], alpha=.25)
     ax.plot(s['f'], s['p'], lw=.8, label='this batch')

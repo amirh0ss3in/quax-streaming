@@ -57,7 +57,7 @@ kafka_admin.close()
 ##
 ## Only 1 partition here, not 8 like topic_stream. the output
 ## side doesn't need parallelism. one result message per batch,
-## produced from the driver via a single KafkaProducer, so there's nothing to
+## written by a single Spark task, so there's nothing to
 ## spread across partitions for.
 ## Verify:
 ## $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 10.67.22.111:9092 --describe --topic topic_results
