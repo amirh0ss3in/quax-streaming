@@ -39,6 +39,7 @@ spark = (
     # had arrived while we were down.
     .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")
     .config("spark.locality.wait", "0") # just use any free core immediately 
+    .config("spark.executor.memory", "1500m")
     .getOrCreate()
 )
 
