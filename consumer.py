@@ -74,27 +74,28 @@ kafka_df = (
     .option("kafka.bootstrap.servers", BOOTSTRAP)
     .option("subscribe", "topic_stream")
     .option("startingOffsets", "latest")
-    .option("maxOffsetsPerTrigger", 2048)
+    .option("maxOffsetsPerTrigger", 1024)
     .option("failOnDataLoss", "false")
     .option("kafka.max.partition.fetch.bytes", 33554432)   # 32 MiB, ~64 msgs
     .load()
 )
 
+
 ## NOTE:
-## Assume a micro-batch contains the maximum 2048 Kafka messages.
-## With 8 Kafka partitions, ideally we have 256 messages per partition.
+## Assume a micro-batch contains the maximum 1024 Kafka messages.
+## With 8 Kafka partitions, ideally we have 128 messages per partition.
 ##
 ## message_partials is a vectorized map: it processes the messages in Arrow batches
-## of 64 messages at a time. Therefore, each partition has 256 / 64 = 4 Arrow batches.
+## of 64 messages at a time. Therefore, each partition has 128 / 64 = 2 Arrow batches.
 ## Each Arrow batch produces 64 output rows, one output row per input message.
 ## Each output row contains one array of length 4096:
 ##   first 2048 values = sum P over the 32 scans
 ##   second 2048 values = sum P**2 over the 32 scans.
 ##
 ## fold_partition then operates separately on each Spark partition.
-## It receives the 4 Arrow/Pandas batches belonging to that partition,
-## containing 4 × 64 = 256 rows in total.
-## It stacks and sums those 256 partial arrays, producing ONE aggregated row
+## It receives the 2 Arrow/Pandas batches belonging to that partition,
+## containing 2 × 64 = 128 rows in total.
+## It stacks and sums those 128 partial arrays, producing ONE aggregated row
 ## for that partition.
 ##
 ## Therefore, after fold_partition we have:
@@ -105,10 +106,13 @@ kafka_df = (
 ## This causes a shuffle, bringing the 8 rows together.
 ## applyInPandas then receives those 8 rows as one group.
 ## summarize_batch stacks and sums their partial arrays again, producing ONE final row
-## representing the entire 2048-message micro-batch.
+## representing the entire 1024-message micro-batch.
 ##
 ## Finally, foreachBatch runs this whole processing pipeline independently
 ## for each streaming micro-batch.
+##
+## P.S: we used 1024 (not 2048) and 1500m executor memory because full 2048-message batches (~1 GiB) ran 
+## the default 1g executors out of heap.
 
 @pandas_udf(ArrayType(DoubleType()))
 def message_partials(values: pd.Series) -> pd.Series:
