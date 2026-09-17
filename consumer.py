@@ -15,7 +15,7 @@ SCANS_PER_MSG = 32                                    # must match producer.py
 SCAN_LEN = 2048
 MSG_BYTES = SCANS_PER_MSG * SCAN_LEN * 4 * 2          # float32, I and Q
 FS = 2e6                                              # ADC rate, 2 MS/s
-FREQ_HZ = np.fft.fftshift(np.fft.fftfreq(SCAN_LEN, 1 / FS)).tolist()   # -1 MHz .. +1 MHz
+FREQ_HZ = np.fft.fftshift(np.fft.fftfreq(SCAN_LEN, 1 / FS))   # -1 MHz .. +1 MHz
 BOOTSTRAP = "10.67.22.111:9092"
 
 spark = (
@@ -121,7 +121,7 @@ def message_partials(values: pd.Series) -> pd.Series:
         sig = (flat[:half].reshape(SCANS_PER_MSG, SCAN_LEN).astype(np.float64)
                + 1j * flat[half:].reshape(SCANS_PER_MSG, SCAN_LEN).astype(np.float64))
         power = np.abs(np.fft.fftshift(np.fft.fft(sig, axis=1), axes=1)) ** 2
-        out.append(np.concatenate([power.sum(0), (power ** 2).sum(0)]).tolist())
+        out.append(np.concatenate([power.sum(0), (power ** 2).sum(0)]))
     return pd.Series(out)
 
 
@@ -144,7 +144,7 @@ def fold_partition(arrow_batches):
         total = chunk if total is None else total + chunk
         n += len(pdf) * SCANS_PER_MSG
     if total is not None:
-        yield pd.DataFrame([{"partials": total.tolist(), "n_scans": n}])
+        yield pd.DataFrame([{"partials": total, "n_scans": n}])
 
 
 folded_df = partials_df.mapInPandas(fold_partition, schema=folded_schema)
@@ -167,8 +167,8 @@ def summarize_batch(pdf: pd.DataFrame) -> pd.DataFrame:
     var = np.maximum(s2 / n - mean ** 2, 0.0)          # guard fp noise
     return pd.DataFrame([{
         "freq_hz": FREQ_HZ,
-        "avg_power": mean.tolist(),
-        "std_power": np.sqrt(var).tolist(),
+        "avg_power": mean,
+        "std_power": np.sqrt(var),
         "n_scans": n,
     }])
 
