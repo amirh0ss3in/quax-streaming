@@ -2,10 +2,11 @@ import os
 os.environ["PYSPARK_PYTHON"] = "/home/ubuntu/pyvenv/bin/python3"
 os.environ["PYSPARK_DRIVER_PYTHON"] = "/home/ubuntu/pyvenv/bin/python3"
 
+import json
 import numpy as np
 import pandas as pd
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, pandas_udf, lit, to_json, struct
+from pyspark.sql.functions import col, pandas_udf
 from pyspark.sql.types import (
     StructType, StructField, ArrayType, DoubleType, LongType
 )
@@ -29,10 +30,6 @@ spark = (
     # slices over its partition with a window of 64 messages. At 512 KiB each that is
     # ~32 MiB of raw message payload per Arrow batch; the default 10 000 would be around 5 GiB and (B)OOM.
     .config("spark.sql.execution.arrow.maxRecordsPerBatch", "64")
-    # the only shuffle is groupBy(lit(1)): one key, so exactly one reduce task can
-    # ever receive rows. The default 200 would schedule 200 tasks per micro-batch,
-    # 199 of them empty. Nothing crazy would happen with the default value, but it is nice to keep things in check.
-    .config("spark.sql.shuffle.partitions", "1")
     # This is a live monitor: after a restart we want current spectra, not a replay
     # of a stale backlog. So no persistent checkpoint. Spark makes a temporary one
     # per run and this line deletes it on stop. Cost: a restart skips whatever
@@ -101,12 +98,12 @@ kafka_df = (
 ## Therefore, after fold_partition we have:
 ##   8 partitions × 1 row = 8 rows.
 ##
-## summarize_batch must now combine these 8 partition-level rows into one final result.
-## We group all 8 rows under one dummy key using groupBy(lit(1)).
-## This causes a shuffle, bringing the 8 rows together.
-## applyInPandas then receives those 8 rows as one group.
-## summarize_batch stacks and sums their partial arrays again, producing ONE final row
-## representing the entire 1024-message micro-batch.
+## process_batch must now combine these 8 partition-level rows into one final result.
+## (ΣP, ΣP², n) are all plain sums, so this is a reduction, not a grouping: rdd.fold adds
+## the 8 rows together and returns ONE (sums, n) pair to the driver - no dummy key, no shuffle.
+## The driver then computes mean and std and publishes one JSON message to topic_results
+## through Spark's Kafka sink (wrapped in a one-row DataFrame, since the fold result is a plain tuple).
+## fold rather than reduce: reduce raises on an empty RDD, fold just returns the zero value.
 ##
 ## Finally, foreachBatch runs this whole processing pipeline independently
 ## for each streaming micro-batch.
@@ -155,35 +152,27 @@ def fold_partition(arrow_batches):
 folded_df = partials_df.mapInPandas(fold_partition, schema=folded_schema)
 
 
-# reduce: avg + std per bin, one row per micro-batch.
-output_schema = StructType([
-    StructField("freq_hz",   ArrayType(DoubleType())),
-    StructField("avg_power", ArrayType(DoubleType())),
-    StructField("std_power", ArrayType(DoubleType())),
-    StructField("n_scans",   LongType()),
-])
-
-
-def summarize_batch(pdf: pd.DataFrame) -> pd.DataFrame:
-    total = np.stack(pdf["partials"].to_numpy()).sum(axis=0)
-    s1, s2 = total[:SCAN_LEN], total[SCAN_LEN:]
-    n = int(pdf["n_scans"].sum())
-    mean = s1 / n
-    var = np.maximum(s2 / n - mean ** 2, 0.0)          # guard fp noise
-    return pd.DataFrame([{
-        "freq_hz": FREQ_HZ,
-        "avg_power": mean,
-        "std_power": np.sqrt(var),
-        "n_scans": n,
-    }])
+# reduce: avg + std per bin, one message per micro-batch.
+ZERO = (np.zeros(2 * SCAN_LEN), 0)
 
 
 def process_batch(batch_df, batch_id):
-    (batch_df
-        .groupBy(lit(1).alias("dummy"))
-        .applyInPandas(summarize_batch, schema=output_schema) # Horrible name btw, it would've been better to call it applyToGroup
-        .select(to_json(struct(lit(batch_id).alias("batch_id"),
-                               "freq_hz", "avg_power", "std_power", "n_scans")).alias("value"))
+    total, n = (batch_df.rdd
+                .map(lambda r: (np.array(r.partials), r.n_scans))
+                .fold(ZERO, lambda a, b: (a[0] + b[0], a[1] + b[1])))
+    if n == 0:                                            # empty micro-batch
+        return
+    s1, s2 = total[:SCAN_LEN], total[SCAN_LEN:]
+    mean = s1 / n
+    var = np.maximum(s2 / n - mean ** 2, 0.0)             # guard fp noise
+    msg = json.dumps({
+        "batch_id": batch_id,
+        "freq_hz": FREQ_HZ.tolist(),
+        "avg_power": mean.tolist(),
+        "std_power": np.sqrt(var).tolist(),
+        "n_scans": n,
+    })
+    (spark.createDataFrame([(msg,)], "value string")      # one-row DataFrame for the Kafka sink
         .write
         .format("kafka")
         .option("kafka.bootstrap.servers", BOOTSTRAP)
